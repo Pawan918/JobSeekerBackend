@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               Int            @id @default(autoincrement())
+  email            String         @unique
+  name             String
+  password         String
+  role             String         @default("user")
+  jobs             Job[]          @relation("UserJobs")
+  bookmarks        Bookmark[]
+  applications     Application[]
+  createdAt        DateTime       @default(now())
+  refreshTokens    RefreshToken[]
+  resetToken       String?
+  resetTokenExpiry DateTime?
+}
+
+model Job {
+  id           Int           @id @default(autoincrement())
+  title        String
+  description  String
+  location     String
+  company      String
+  type         String
+  tags         String[]
+  postedBy     User?         @relation("UserJobs", fields: [postedById], references: [id])
+  postedById   Int?
+  bookmarks    Bookmark[]
+  applyUrl     String? // optional apply link
+  applyEmail   String? // optional email to apply
+  applications Application[]
+  createdAt    DateTime      @default(now())
+}
+
+model Bookmark {
+  id     Int  @id @default(autoincrement())
+  user   User @relation(fields: [userId], references: [id])
+  userId Int
+  job    Job  @relation(fields: [jobId], references: [id])
+  jobId  Int
+
+  @@unique([userId, jobId]) // prevent duplicate bookmarks
+}
+
+model Application {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  job       Job      @relation(fields: [jobId], references: [id])
+  jobId     Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, jobId]) // Prevent duplicate applications
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
