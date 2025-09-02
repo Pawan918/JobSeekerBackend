@@ -3,7 +3,7 @@ const prisma = require("../prismaClient");
 const { authenticate } = require("../middleware/authMiddleware");
 
 const router = express.Router();
-// Get all applications for the authenticated user
+
 router.get("/me", authenticate, async (req, res, next) => {
   try {
     const userId = req.user.userId;

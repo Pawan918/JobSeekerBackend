@@ -3,7 +3,7 @@ const prisma = require("../prismaClient");
 const { authenticate } = require("../middleware/authMiddleware");
 const router = express.Router();
 
-// ✅ Get all jobs with filters & pagination
+// Get all jobs with filters & pagination
 router.get("/", async (req, res, next) => {
   try {
     const { search, type, location, page = 1, limit = 6 } = req.query;
@@ -39,7 +39,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// ✅ Create a new job
+// Create a new job
 router.post("/", authenticate, async (req, res, next) => {
   try {
     const userId = req.user.userId;
@@ -80,7 +80,7 @@ router.post("/", authenticate, async (req, res, next) => {
   }
 });
 
-// ✅ Get jobs created by current user
+// Get jobs created by current user
 router.get("/me", authenticate, async (req, res, next) => {
   try {
     const userId = req.user.userId;
@@ -96,22 +96,33 @@ router.get("/me", authenticate, async (req, res, next) => {
   }
 });
 
-// ✅ Delete all jobs created by current user
-router.delete("/me/delete-all", authenticate, async (req, res, next) => {
-  try {
-    const userId = req.user.userId;
+// Apply to a job
+router.post("/apply/:jobId", authenticate, async (req, res) => {
+  const userId = req.user.userId;
+  const jobId = parseInt(req.params.jobId);
 
-    const deleted = await prisma.job.deleteMany({
-      where: { postedById: userId },
+  try {
+    const alreadyApplied = await prisma.application.findFirst({
+      where: { userId: userId, jobId },
     });
 
-    res.json({ message: `Deleted ${deleted.count} job(s)` });
+    if (alreadyApplied)
+      return res.status(400).json({ error: "Already applied" });
+
+    const newApp = await prisma.application.create({
+      data: {
+        userId,
+        jobId,
+      },
+    });
+
+    res.json({ message: "Applied successfully", application: newApp });
   } catch (error) {
     next(error);
   }
 });
 
-// ✅ Get job by ID
+// Get job by ID
 router.get("/:id", async (req, res, next) => {
   try {
     const jobId = parseInt(req.params.id, 10);
@@ -137,7 +148,68 @@ router.get("/:id", async (req, res, next) => {
     next(error);
   }
 });
-// ✅ Delete job by ID (ownership check)
+
+// Update a job by ID
+router.put("/:id", authenticate, async (req, res) => {
+  try {
+    const jobId = parseInt(req.params.id);
+    const userId = req.user.userId;
+
+    const existingJob = await prisma.job.findUnique({ where: { id: jobId } });
+
+    if (!existingJob) return res.status(404).json({ error: "Job not found" });
+    if (existingJob.postedById !== userId) throw err;
+
+    const {
+      title,
+      description,
+      location,
+      company,
+      type,
+      tags,
+      applyUrl,
+      applyEmail,
+    } = req.body || {};
+    if (!title || !description || !company) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const updated = await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        title,
+        description,
+        location,
+        company,
+        type,
+        tags,
+        applyUrl: applyUrl || null,
+        applyEmail: applyEmail || null,
+      },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Delete all jobs created by current user
+router.delete("/me/delete-all", authenticate, async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+
+    const deleted = await prisma.job.deleteMany({
+      where: { postedById: userId },
+    });
+
+    res.json({ message: `Deleted ${deleted.count} job(s)` });
+  } catch (error) {
+    next(error);
+  }
+});
+
+//  Delete job by id
 router.delete("/:id", authenticate, async (req, res, next) => {
   try {
     const userId = req.user.userId;

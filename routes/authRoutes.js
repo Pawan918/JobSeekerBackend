@@ -2,13 +2,13 @@ const express = require("express");
 const prisma = require("../prismaClient");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
-const crypto = require("crypto"); // ✅ needed for reset tokens
+const crypto = require("crypto");
 const { authenticate } = require("../middleware/authMiddleware");
-const sendEmail = require("../utils/sendEmail"); // ✅ assuming you have a helper
+const sendEmail = require("../utils/sendEmail");
 
 const router = express.Router();
 
-// ✅ Register
+// Register
 router.post("/register", async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
@@ -43,7 +43,7 @@ router.post("/register", async (req, res, next) => {
   }
 });
 
-// ✅ Login
+//  Login
 router.post("/login", async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -70,8 +70,27 @@ router.post("/login", async (req, res, next) => {
     const token = jwt.sign(
       { userId: user.id },
       process.env.JWT_SECRET || "mysecret",
-      { expiresIn: "1h" }
+      { expiresIn: "5m" }
     );
+
+    const refreshToken = crypto.randomBytes(40).toString("hex");
+    const refreshTokenExpiry = new Date();
+    refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 7);
+
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: refreshTokenExpiry,
+      },
+    });
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     res.json({
       token,
@@ -87,7 +106,7 @@ router.post("/login", async (req, res, next) => {
   }
 });
 
-// ✅ Get current user
+// Get current user
 router.get("/me", authenticate, async (req, res, next) => {
   try {
     const userId = req.user.userId;
@@ -108,14 +127,12 @@ router.get("/me", authenticate, async (req, res, next) => {
   }
 });
 
-// ✅ Refresh token (if you’re using DB-stored tokens)
+// Refresh token (if you’re using DB-stored tokens)
 router.post("/refresh-token", async (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies.refreshToken;
     if (!refreshToken) {
-      const err = new Error("Refresh token required");
-      err.statusCode = 400;
-      throw err;
+      return res.status(401).json({ message: "Refresh token required" });
     }
 
     const savedToken = await prisma.refreshToken.findUnique({
@@ -124,41 +141,37 @@ router.post("/refresh-token", async (req, res, next) => {
     });
 
     if (!savedToken || savedToken.expiresAt < new Date()) {
-      const err = new Error("Invalid or expired refresh token");
-      err.statusCode = 403;
-      throw err;
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
+    // Generate new access token
     const newAccessToken = jwt.sign(
       { userId: savedToken.userId },
       process.env.JWT_SECRET || "mysecret",
-      { expiresIn: "15m" }
+      { expiresIn: "5m" }
     );
-
     res.json({ accessToken: newAccessToken });
   } catch (error) {
     next(error);
   }
 });
 
-// ✅ Logout
+// Logout
 router.post("/logout", async (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
-    if (!refreshToken) {
-      const err = new Error("Refresh token required");
-      err.statusCode = 400;
-      throw err;
+    const refreshToken = req.cookies.refreshToken;
+    if (refreshToken) {
+      await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
     }
 
-    await prisma.refreshToken.delete({ where: { token: refreshToken } });
+    res.clearCookie("refreshToken");
     res.json({ message: "Logged out successfully" });
   } catch (error) {
     next(error);
   }
 });
 
-// ✅ Forgot password
+// Forgot password
 router.post("/forgot-password", async (req, res, next) => {
   try {
     const { email } = req.body;
@@ -204,7 +217,7 @@ router.post("/forgot-password", async (req, res, next) => {
   }
 });
 
-// ✅ Reset password
+// Reset password
 router.post("/reset-password", async (req, res, next) => {
   try {
     const { token, password } = req.body;
