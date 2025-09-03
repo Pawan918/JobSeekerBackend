@@ -9,7 +9,7 @@ dotenv.config();
 const app = express();
 app.use(
   cors({
-    origin: "*",
+    origin: process.env.FRONTEND_URL,
     credentials: true,
   })
 );
@@ -27,7 +27,6 @@ app.use("/api/jobs", jobRoutes);
 app.use("/api/applications", applicationRoutes);
 app.use("/api/bookmarks", bookmarkRoutes);
 
-// Error Handler
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;

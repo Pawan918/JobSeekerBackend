@@ -70,7 +70,7 @@ router.post("/login", async (req, res, next) => {
     const token = jwt.sign(
       { userId: user.id },
       process.env.JWT_SECRET || "mysecret",
-      { expiresIn: "5m" }
+      { expiresIn: "1h" }
     );
 
     const refreshToken = crypto.randomBytes(40).toString("hex");
@@ -148,7 +148,7 @@ router.post("/refresh-token", async (req, res, next) => {
     const newAccessToken = jwt.sign(
       { userId: savedToken.userId },
       process.env.JWT_SECRET || "mysecret",
-      { expiresIn: "5m" }
+      { expiresIn: "1h" }
     );
     res.json({ accessToken: newAccessToken });
   } catch (error) {
