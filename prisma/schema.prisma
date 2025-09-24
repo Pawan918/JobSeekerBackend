@@ -7,36 +7,45 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ApplicationStatus {
+  PENDING   // default when candidate applies
+  ACCEPTED
+  REJECTED
+}
+
 model User {
-  id               Int            @id @default(autoincrement())
-  email            String         @unique
+  id               Int             @id @default(autoincrement())
+  email            String          @unique
   name             String
   password         String
-  role             String         @default("user")
-  jobs             Job[]          @relation("UserJobs")
+  role             String          @default("user")
+  jobs             Job[]           @relation("UserJobs")
   bookmarks        Bookmark[]
   applications     Application[]
-  createdAt        DateTime       @default(now())
+  notifications    Notification[]  @relation("NotificationUser")   // received notifications
+  sentNotifications Notification[] @relation("NotificationActor")  // triggered notifications
+  createdAt        DateTime        @default(now())
   refreshTokens    RefreshToken[]
   resetToken       String?
   resetTokenExpiry DateTime?
 }
 
 model Job {
-  id           Int           @id @default(autoincrement())
+  id           Int             @id @default(autoincrement())
   title        String
   description  String
   location     String
   company      String
   type         String
   tags         String[]
-  postedBy     User?         @relation("UserJobs", fields: [postedById], references: [id])
+  postedBy     User?           @relation("UserJobs", fields: [postedById], references: [id])
   postedById   Int?
   bookmarks    Bookmark[]
-  applyUrl     String? // optional apply link
-  applyEmail   String? // optional email to apply
+  applyUrl     String?
+  applyEmail   String?
   applications Application[]
-  createdAt    DateTime      @default(now())
+  notifications Notification[]  // backref
+  createdAt    DateTime         @default(now())
 }
 
 model Bookmark {
@@ -46,18 +55,20 @@ model Bookmark {
   job    Job  @relation(fields: [jobId], references: [id])
   jobId  Int
 
-  @@unique([userId, jobId]) // prevent duplicate bookmarks
+  @@unique([userId, jobId])
 }
 
 model Application {
-  id        Int      @id @default(autoincrement())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    Int
-  job       Job      @relation(fields: [jobId], references: [id])
-  jobId     Int
-  createdAt DateTime @default(now())
+  id           Int                @id @default(autoincrement())
+  user         User               @relation(fields: [userId], references: [id])
+  userId       Int
+  job          Job                @relation(fields: [jobId], references: [id])
+  jobId        Int
+  notifications Notification[]    // backref
+  status       ApplicationStatus  @default(PENDING)
+  createdAt    DateTime           @default(now())
 
-  @@unique([userId, jobId]) // Prevent duplicate applications
+  @@unique([userId, jobId])
 }
 
 model RefreshToken {
@@ -67,4 +78,26 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id])
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+
+model Notification {
+  id            Int          @id @default(autoincrement())
+  userId        Int
+  user          User         @relation("NotificationUser", fields: [userId], references: [id])
+
+  actorId       Int?
+  actor         User?        @relation("NotificationActor", fields: [actorId], references: [id])
+
+  type          String
+  message       String
+
+  jobId         Int?
+  job           Job?         @relation(fields: [jobId], references: [id])
+
+  applicationId Int?
+  application   Application? @relation(fields: [applicationId], references: [id])
+
+  isRead        Boolean      @default(false)
+  createdAt     DateTime     @default(now())
 }

@@ -2,6 +2,7 @@ const express = require("express");
 const prisma = require("../prismaClient");
 const { authenticate } = require("../middleware/authMiddleware");
 const router = express.Router();
+const socket = require("../socket");
 
 // Get all jobs with filters & pagination
 router.get("/", async (req, res, next) => {
@@ -97,24 +98,56 @@ router.get("/me", authenticate, async (req, res, next) => {
 });
 
 // Apply to a job
-router.post("/apply/:jobId", authenticate, async (req, res) => {
+router.post("/apply/:jobId", authenticate, async (req, res, next) => {
   const userId = req.user.userId;
   const jobId = parseInt(req.params.jobId);
+  const io = socket.getIO();
 
   try {
     const alreadyApplied = await prisma.application.findFirst({
-      where: { userId: userId, jobId },
+      where: { userId, jobId },
     });
 
-    if (alreadyApplied)
+    if (alreadyApplied) {
       return res.status(400).json({ error: "Already applied" });
+    }
 
-    const newApp = await prisma.application.create({
-      data: {
-        userId,
-        jobId,
-      },
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      include: { postedBy: true },
     });
+
+    if (!job) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+
+    // create application
+    const newApp = await prisma.application.create({
+      data: { userId, jobId, status: "PENDING" },
+      include: { user: true },
+    });
+
+    // notify job owner
+    if (job.postedById) {
+      const notification = await prisma.notification.create({
+        data: {
+          userId: job.postedById,
+          actorId: userId,
+          type: "JOB_APPLIED",
+          message: `${newApp.user.name} applied for your job: ${job.title}`,
+          jobId,
+          applicationId: newApp.id,
+        },
+        include: {
+          actor: { select: { id: true, name: true } },
+          job: { select: { id: true, title: true } },
+        },
+      });
+      io.to(job.postedById.toString()).emit(
+        "receiveNotification",
+        notification
+      );
+    }
 
     res.json({ message: "Applied successfully", application: newApp });
   } catch (error) {
@@ -185,6 +218,65 @@ router.put("/:id", authenticate, async (req, res) => {
         tags,
         applyUrl: applyUrl || null,
         applyEmail: applyEmail || null,
+      },
+    });
+
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      include: { postedBy: true },
+    });
+
+    if (job?.postedById) {
+      const notification = await prisma.notification.create({
+        data: {
+          userId: job.postedById, // recipient = job owner
+          actorId: userId, // who triggered = candidate
+          type: "JOB_APPLIED",
+          message: `${newApp.user.name} applied for your job: ${job.title}`,
+          jobId,
+          applicationId: newApp.id,
+        },
+      });
+    }
+
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Update application status (ACCEPTED / REJECTED)
+router.put("/applications/:id/status", authenticate, async (req, res, next) => {
+  try {
+    const { status } = req.body; // ACCEPTED or REJECTED
+    const appId = parseInt(req.params.id);
+    const userId = req.user.userId;
+
+    const application = await prisma.application.findUnique({
+      where: { id: appId },
+      include: { job: true, user: true },
+    });
+
+    if (!application)
+      return res.status(404).json({ error: "Application not found" });
+    if (application.job.postedById !== userId) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const updated = await prisma.application.update({
+      where: { id: appId },
+      data: { status },
+    });
+
+    // notify candidate
+    const notification = await prisma.notification.create({
+      data: {
+        userId: application.userId, // candidate
+        actorId: userId, // recruiter
+        type: "APPLICATION_STATUS",
+        message: `Your application for ${application.job.title} was ${status}`,
+        jobId: application.jobId,
+        applicationId: application.id,
       },
     });
 
