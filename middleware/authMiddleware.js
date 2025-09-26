@@ -23,4 +23,30 @@ const authenticate = (req, res, next) => {
   }
 };
 
-module.exports = { authenticate };
+const softAuth = (req, res, next) => {
+  let token;
+  const authHeader = req.headers.authorization;
+
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.split(" ")[1];
+  } else if (req.cookies?.accessToken) {
+    token = req.cookies.accessToken;
+  }
+
+  if (!token) {
+    // no token → just continue without req.user
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "mysecret");
+    req.user = decoded; // typically contains userId from your token payload
+  } catch (err) {
+    console.log("optionalAuth failed:", err.message);
+    // don’t block → just continue as guest
+  }
+
+  next();
+};
+
+module.exports = { authenticate, softAuth };

@@ -1,15 +1,16 @@
 const express = require("express");
 const prisma = require("../prismaClient");
-const { authenticate } = require("../middleware/authMiddleware");
+const { authenticate, softAuth } = require("../middleware/authMiddleware");
 const router = express.Router();
 const socket = require("../socket");
 
 // Get all jobs with filters & pagination
-router.get("/", async (req, res, next) => {
+router.get("/", softAuth, async (req, res, next) => {
   try {
     const { search, type, location, page = 1, limit = 6 } = req.query;
 
     const filters = {};
+
     if (search) {
       filters.OR = [
         { title: { contains: search, mode: "insensitive" } },
@@ -17,9 +18,15 @@ router.get("/", async (req, res, next) => {
         { company: { contains: search, mode: "insensitive" } },
       ];
     }
+
     if (type) filters.type = type;
-    if (location)
+
+    if (location) {
       filters.location = { contains: location, mode: "insensitive" };
+    }
+    if (req.user?.userId) {
+      filters.postedById = { not: req.user.userId };
+    }
 
     const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const take = parseInt(limit, 10);
