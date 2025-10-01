@@ -5,6 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon server.cjs",
+    "build": "prisma generate",
     "start": "prisma migrate deploy && node server.cjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
