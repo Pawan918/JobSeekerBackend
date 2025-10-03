@@ -190,7 +190,7 @@ router.get("/:id", async (req, res, next) => {
 });
 
 // Update a job by ID
-router.put("/:id", authenticate, async (req, res) => {
+router.put("/:id", authenticate, async (req, res, next) => {
   try {
     const jobId = parseInt(req.params.id);
     const userId = req.user.userId;
@@ -233,18 +233,18 @@ router.put("/:id", authenticate, async (req, res) => {
       include: { postedBy: true },
     });
 
-    if (job?.postedById) {
-      const notification = await prisma.notification.create({
-        data: {
-          userId: job.postedById, // recipient = job owner
-          actorId: userId, // who triggered = candidate
-          type: "JOB_APPLIED",
-          message: `${newApp.user.name} applied for your job: ${job.title}`,
-          jobId,
-          applicationId: newApp.id,
-        },
-      });
-    }
+    // if (job?.postedById) {
+    //   const notification = await prisma.notification.create({
+    //     data: {
+    //       userId: job.postedById, // recipient = job owner
+    //       actorId: userId, // who triggered = candidate
+    //       type: "JOB_APPLIED",
+    //       message: `${newApp.user.name} applied for your job: ${job.title}`,
+    //       jobId,
+    //       applicationId: newApp.id,
+    //     },
+    //   });
+    // }
 
     res.json(updated);
   } catch (error) {
