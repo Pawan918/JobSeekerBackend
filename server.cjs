@@ -11,9 +11,10 @@ dotenv.config();
 const app = express();
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: [process.env.FRONTEND_URL, process.env.PORTFOLIO_URL],
     credentials: true,
-  })
+    methods: ["GET", "POST", "PUT", "DELETE"],
+  }),
 );
 app.use(express.json());
 app.use(cookieParser());
@@ -23,6 +24,7 @@ const jobRoutes = require("./routes/jobRoutes");
 const applicationRoutes = require("./routes/applicationRoutes");
 const bookmarkRoutes = require("./routes/bookmarkRoutes");
 const notificationRoutes = require("./routes/notifictationRoutes");
+const contactRoutes = require("./routes/contactRoutes");
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -30,6 +32,7 @@ app.use("/api/jobs", jobRoutes);
 app.use("/api/applications", applicationRoutes);
 app.use("/api/bookmarks", bookmarkRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/contact", contactRoutes);
 
 app.use(errorHandler);
 const server = http.createServer(app);
